@@ -1,0 +1,9 @@
+# Pin constraints — blink_button
+# Target: ICE40HX8K-CT256
+#
+# clk: J3 = GBIN6 (SYSCLK).  Drive from LAN8720 REFCLK (50 MHz) or any
+# available oscillator.  Adjust CLK_HZ in top.v to match.
+
+set_io              clk  J3   # GBIN6/SYSCLK — external clock input
+set_io              led  C2  # LED1 (board LED, active high)
+set_io -pullup yes  btn  F4   # PIO3_05 — Button (active low)

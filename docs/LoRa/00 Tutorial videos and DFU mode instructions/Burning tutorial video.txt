@@ -1,0 +1,8 @@
+Since the LR20/30 series has two versions, please check your order to confirm the version and refer to the corresponding video for learning how to burn the firmware.
+
+https://youtu.be/hX-SSG80Oh8?si=5gjV5DjxgIYffU_W  《LR20/30 series old model burning tutorial》
+https://youtu.be/L_HUamG1tiY?si=bQwIUzYVx_draZ6w  《LR20/30 Series New Burning Tutorial》
+
+Note:
+1.This document provides a quick guide on how to quickly verify the functionality of LR20/30 products and a tutorial on burning them.
+2.Tutorial for those who cannot enter DFU mode

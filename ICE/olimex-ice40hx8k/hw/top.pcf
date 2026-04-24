@@ -1,0 +1,38 @@
+# =============================================================================
+# Pin Constraint File — LAN8720 RMII network tap
+# Target: ICE40HX8K-CT256
+# Wiring: LAN8720 module on J2 connector (new assignment 2026-04)
+# =============================================================================
+
+# Clock — LAN8720 NINT/REFCLK 50 MHz → J3 (GBIN6 / board EXTCLK / pi03_26)
+set_io ref_clk    J3   # NINT/REFCLK  50 MHz  (GBIN6)
+
+# RMII inputs (LAN8720 → FPGA)
+set_io rxd0       F2   # RX0   dibit 0  (pi03_17)
+set_io rxd1       H4   # RX1   dibit 1  (pi03_20)
+set_io crs_dv     G2   # CRS             (pi03_21)
+
+# RMII outputs (FPGA → LAN8720, held idle — receive-only tap)
+set_io txen       H3   # TX_EN           (pi03_16)
+set_io txd0       F1   # TXD0  dibit 0  (pi03_19)
+set_io txd1       F3   # TX1   dibit 1  (pi03_15)
+
+# MDIO management bus (MDIO driven idle-high, MDC driven low)
+set_io mdc        J4   # MDC             (pi03_22)
+set_io mdio_out   H6   # MDIO            (pi03_18)
+
+# SPI slave → Pi (PGM1 header, runtime reuse after CDONE)
+set_io -nowarn spi_sck   R11   # Pi GPIO11  SPI0_CLK
+set_io -nowarn spi_cs_n  R12   # Pi GPIO8   SPI0_CE0_N
+set_io -nowarn spi_miso  P12   # Pi GPIO9   SPI0_MISO
+
+# Board LEDs (status)
+set_io led1    M12   # LED1 — toggles each received Ethernet frame
+set_io led2    R16   # LED2 — on while FIFO has data (PHY active)
+
+# Clock-alive diagnostics on old freq_test pins (for Logic2 verification)
+# These will only toggle if ref_clk (E4) is running.
+set_io dbg0    D2    # ref_clk/2^26 ≈ 0.74 Hz @ 50 MHz  (pi03_07)
+set_io dbg1    G5    # ref_clk/2^25 ≈ 1.5  Hz @ 50 MHz  (pi03_08)
+set_io dbg2    D1    # ref_clk/2^24 ≈ 3    Hz @ 50 MHz  (pi03_09)
+set_io dbg3    G4    # rx_valid pulse — fires on each received byte

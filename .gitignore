@@ -1,0 +1,24 @@
+# Build outputs
+build/
+*.bin
+*.bit
+*.json
+*.config
+*.log
+
+# Simulation artifacts
+*.vvp
+*.vcd
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Claude internal
+CLAUDE.md
+
+# Shell expansion accidents (udev rule fragments)
+ATTRS*
+MODE=*
+GROUP=*

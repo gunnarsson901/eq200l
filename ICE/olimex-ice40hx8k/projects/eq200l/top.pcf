@@ -1,0 +1,34 @@
+# eq200l — Dual-port RMII tap pin constraints (iCE40HX8K-CT256)
+#
+# EXTCLK → J3 (GBIN6 / 50 MHz from PHY module)
+set_io clk J3
+
+# ── Port A: router/switch side ────────────────────────────────────────────
+# Signal      PIO3 name  FPGA pin
+set_io phy_a_mdc     D2   # PIO3_07  MDC
+set_io phy_a_crs     G5   # PIO3_08  CRS_DV
+set_io phy_a_rxd[1]  D1   # PIO3_09  RX1
+set_io phy_a_txd[0]  G4   # PIO3_10  TXD
+set_io phy_a_mdio    E3   # PIO3_11  MDIO
+set_io phy_a_rxd[0]  H5   # PIO3_12  RXD
+set_io phy_a_tx_en   E2   # PIO3_13  TX_EN
+set_io phy_a_txd[1]  G3   # PIO3_14  TX1
+
+# ── Port B: target/Pi Ethernet side ──────────────────────────────────────
+set_io phy_b_txd[1]  F3   # PIO3_15  TX1
+set_io phy_b_tx_en   H3   # PIO3_16  TX_EN
+set_io phy_b_rxd[0]  F2   # PIO3_17  RXD
+set_io phy_b_mdio    H6   # PIO3_18  MDIO
+set_io phy_b_txd[0]  F1   # PIO3_19  TXD
+set_io phy_b_rxd[1]  H4   # PIO3_20  RX1
+set_io phy_b_crs     G2   # PIO3_21  CRS_DV
+set_io phy_b_mdc     J4   # PIO3_22  MDC
+
+# ── LED & Button ─────────────────────────────────────────────────────────
+set_io led C2              # PIO3_05  active-high
+set_io -pullup yes btn F4  # PIO3_06  active-low
+
+# ── SPI to Pi (programmer header, shared with ICE40 config) ──────────────
+set_io -nowarn spi_sck   R11  # Pi GPIO11 SPI0_CLK
+set_io -nowarn spi_cs_n  R12  # Pi GPIO8  SPI0_CE0_N
+set_io -nowarn spi_miso  P12  # Pi GPIO9  SPI0_MISO

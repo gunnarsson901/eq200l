@@ -1,0 +1,29 @@
+# freq_test.pcf — pin constraints for frequency test bitstream
+# Target: ICE40HX8K-CT256
+#
+# Clock source: R11 = SCK/PIO2_48 ← Pi GPIO11 (SPI0 CLK, PGM1 connector pin 9)
+#   Pi bit-bangs ~1 kHz on GPIO11 after upload — no oscillator or LAN8720 needed.
+#
+# Outputs on J2 connector:
+#   Ball  pi03     Frequency (@ 1 kHz source)
+#   D2    pi03_07  500 Hz  (/2)
+#   G5    pi03_08  250 Hz  (/4)
+#   D1    pi03_09  125 Hz  (/8)
+#   G4    pi03_10   62 Hz  (/16)
+#   E3    pi03_11   31 Hz  (/32)
+#   H5    pi03_12   15 Hz  (/64)
+#   H2    pi03_23    7 Hz  (/128)
+
+set_io clk_pin    R12  # SS_B/GPIO8 — held LOW by Pi during upload, clock after CDONE
+
+set_io out_div2   D2   # 500 Hz  /2    (pi03_07 / J2.4)
+set_io out_div4   G5   # 250 Hz  /4    (pi03_08 / J2.5)
+set_io out_div8   D1   # 125 Hz  /8    (pi03_09 / J2.9)
+set_io out_div16  G4   #  62 Hz  /16   (pi03_10)
+set_io out_div32  E3   #  31 Hz  /32   (pi03_11)
+set_io out_div64  H5   #  15 Hz  /64   (pi03_12)
+set_io out_div128 H2   #   7 Hz  /128  (pi03_23)
+
+set_io led1       M12  # LED1 ~1 Hz blink   (board LED)
+set_io led2       R16  # LED2 ~2 Hz blink   (board LED)
+set_io test_out   J4   # ~4 Hz → pi03_22 → Pi GPIO 15 (UART RXD)

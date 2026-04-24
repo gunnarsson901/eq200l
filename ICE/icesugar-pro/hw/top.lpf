@@ -1,0 +1,61 @@
+# IceSugar Pro (LFE5U-25F-6CABGA256) — Ethernet Tap constraints
+
+# ==================================================================
+# System clock  25 MHz oscillator
+# ==================================================================
+LOCATE COMP "clk_25m"    SITE "P6";
+IOBUF  PORT "clk_25m"    IO_TYPE=LVCMOS33;
+FREQUENCY PORT "clk_25m" 25.0 MHz;
+
+# ==================================================================
+# ETH1 RMII — P2 connector on BRB → LAN8720 ETH1
+# ==================================================================
+LOCATE COMP "e1_ref_clk"  SITE "L2";
+LOCATE COMP "e1_crs_dv"   SITE "M1";
+LOCATE COMP "e1_rxd[0]"   SITE "M2";
+LOCATE COMP "e1_rxd[1]"   SITE "N1";
+LOCATE COMP "e1_txen"     SITE "N3";
+LOCATE COMP "e1_txd[0]"   SITE "P1";
+LOCATE COMP "e1_txd[1]"   SITE "P2";
+
+IOBUF PORT "e1_ref_clk"  IO_TYPE=LVCMOS33;
+IOBUF PORT "e1_crs_dv"   IO_TYPE=LVCMOS33;
+IOBUF PORT "e1_rxd[0]"   IO_TYPE=LVCMOS33;
+IOBUF PORT "e1_rxd[1]"   IO_TYPE=LVCMOS33;
+IOBUF PORT "e1_txen"     IO_TYPE=LVCMOS33;
+IOBUF PORT "e1_txd[0]"   IO_TYPE=LVCMOS33;
+IOBUF PORT "e1_txd[1]"   IO_TYPE=LVCMOS33;
+
+FREQUENCY PORT "e1_ref_clk" 50.0 MHz;
+
+# ==================================================================
+# ETH2 RMII — P3 connector on BRB → LAN8720 ETH2
+# ==================================================================
+LOCATE COMP "e2_ref_clk"  SITE "A7";
+LOCATE COMP "e2_crs_dv"   SITE "B7";
+LOCATE COMP "e2_rxd[0]"   SITE "A6";
+LOCATE COMP "e2_rxd[1]"   SITE "B6";
+LOCATE COMP "e2_txen"     SITE "A5";
+LOCATE COMP "e2_txd[0]"   SITE "B5";
+LOCATE COMP "e2_txd[1]"   SITE "A4";
+
+IOBUF PORT "e2_ref_clk"  IO_TYPE=LVCMOS33;
+IOBUF PORT "e2_crs_dv"   IO_TYPE=LVCMOS33;
+IOBUF PORT "e2_rxd[0]"   IO_TYPE=LVCMOS33;
+IOBUF PORT "e2_rxd[1]"   IO_TYPE=LVCMOS33;
+IOBUF PORT "e2_txen"     IO_TYPE=LVCMOS33;
+IOBUF PORT "e2_txd[0]"   IO_TYPE=LVCMOS33;
+IOBUF PORT "e2_txd[1]"   IO_TYPE=LVCMOS33;
+
+FREQUENCY PORT "e2_ref_clk" 50.0 MHz;
+
+# ==================================================================
+# Onboard RGB LED (active-low)
+# ==================================================================
+LOCATE COMP "led_r"  SITE "A11";
+LOCATE COMP "led_g"  SITE "A12";
+LOCATE COMP "led_b"  SITE "B11";
+
+IOBUF PORT "led_r"  IO_TYPE=LVCMOS33;
+IOBUF PORT "led_g"  IO_TYPE=LVCMOS33;
+IOBUF PORT "led_b"  IO_TYPE=LVCMOS33;

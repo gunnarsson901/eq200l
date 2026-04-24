@@ -1,0 +1,12 @@
+# Python dependencies for ICE40 network tap
+#
+# spi_read.py and spi2pcap.py have no pip-installable dependencies.
+# The only Python package needed is spidev, which must be installed
+# from the system package manager (not pip) on Raspberry Pi:
+#
+#   sudo apt-get install python3-spidev
+#
+# All other dependencies (yosys, nextpnr-ice40, flashrom, iverilog)
+# are system packages — run install.sh to get everything.
+#
+# Nothing to install via pip for this project.
