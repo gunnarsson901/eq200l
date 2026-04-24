@@ -12,9 +12,17 @@
 
 ## Introduction
 
-**EQ200L** is a hardware + firmware project for building a passive, transparent Ethernet network tap. Traffic flowing between two network endpoints passes through the device unmodified. The FPGA sits in-line, captures a copy of every frame in both directions, and feeds it to a Raspberry Pi Zero 2W for processing and analysis.
+**EQ200L** is a hardware + firmware project for building a passive, transparent Ethernet network tap. Traffic flowing between two network endpoints passes through the device unmodified. The FPGA sits in-line, captures a copy of every frame in both directions, and feeds it to a Raspberry Pi for processing and analysis.
 
-The system supports two FPGA boards (iCE40HX8K and ECP5 iCeSugar Pro), uses LAN8720 PHY breakouts for Ethernet connectivity, exposes a menu-driven OLED interface on the Pi, and includes a LoRa radio link for wireless data relay.
+The system uses LAN8720 PHY breakouts for Ethernet connectivity, exposes a menu-driven OLED interface on the Pi, and includes a LoRa radio link for wireless data relay.
+
+**Hardware progression:**
+
+| Stage | FPGA | Host Pi | Notes |
+|-------|------|---------|-------|
+| Testing | Olimex iCE40HX8K-EVB | Pi Zero 2W | Pi Zero 2W RAM too limited for on-device builds |
+| **Current** | **iCeSugar Pro (ECP5)** | **Raspberry Pi 4** | Build and flash from Pi 4 over USB |
+| Target | iCeSugar Pro (ECP5) | CM4 8GB, 0GB eMMC | Final embedded form factor |
 
 ---
 
@@ -106,7 +114,7 @@ flowchart LR
         FWD -->|tap copy| BUF
     end
 
-    FPGA <-->|SPI / SMI| PI[Raspberry Pi\nZero 2W]
+    FPGA <-->|SPI / SMI| PI[Raspberry Pi 4\n→ CM4 target]
 
     PI --> OLED[SSD1309\nOLED 128×64]
     PI <-->|GPIO| BTN[5-Button\nNavpad]
@@ -119,36 +127,98 @@ flowchart LR
 
 ## Features
 
+### FPGA Core
+
 | Feature | Status |
 |---------|--------|
 | Transparent dual-port Ethernet forwarding | Implemented |
-| RMII frame capture (iCE40 target) | Implemented |
-| RMII frame capture (ECP5 target) | Implemented |
+| RMII frame capture — iCE40HX8K target | Implemented |
+| RMII frame capture — ECP5 iCeSugar Pro target | Implemented |
+| Frame capture FIFO (BRAM-backed) | Implemented |
+| Packet filtering in FPGA | TBI |
+
+### Host Interface
+
+| Feature | Status |
+|---------|--------|
 | UART frame output to host | Implemented |
-| SPI slave interface to Raspberry Pi | Implemented |
+| SPI slave interface to Pi | Implemented |
 | SMI high-bandwidth interface to Pi | TBI |
-| FPGA flash programming via Pi SPI + flashrom | Implemented |
-| FPGA flash programming via openFPGALoader (ECP5) | Implemented |
+| SMI DMA burst transfers | TBI |
+
+### Toolchain & Build
+
+| Feature | Status |
+|---------|--------|
+| FPGA flash via Pi SPI + flashrom (iCE40) | Implemented |
+| FPGA flash via openFPGALoader (ECP5) | Implemented |
 | iverilog simulation + GTKWave waveforms | Implemented |
-| Raspberry Pi OLED menu UI (SSD1309, I2C) | Implemented |
+| ice.sh CLI workflow menu | Implemented |
+
+### User Interface
+
+| Feature | Status |
+|---------|--------|
+| SSD1309 OLED menu UI (128×64, I2C) | Implemented |
 | 5-button navigation with debounce | Implemented |
+| Web interface for captured traffic | TBI |
+
+### Wireless
+
+| Feature | Status |
+|---------|--------|
 | LoRa UART bridge terminal | Implemented |
 | LoRa chip probe / configuration utility | Implemented |
-| Packet filtering in FPGA | TBI |
-| Pi-side frame decoder / pcap export | TBI |
-| Web interface for captured traffic | TBI |
 | Wireless streaming of captures via LoRa | TBI |
-| SMI DMA burst transfers | TBI |
+
+### Software / Analysis
+
+| Feature | Status |
+|---------|--------|
+| Pi-side frame decoder / pcap export | TBI |
+
+### Hardware Platform
+
+| Milestone | Status |
+|-----------|--------|
+| iCE40HX8K-EVB + Pi Zero 2W (initial testing) | Implemented |
+| iCeSugar Pro (ECP5) + Raspberry Pi 4 (current) | Implemented |
+| CM4 8GB RAM, 0GB eMMC — final form factor | TBI |
 
 ---
 
 ## Devices
 
-### FPGA — Olimex iCE40HX8K-EVB
+### FPGA — iCeSugar Pro (ECP5) — *current board*
 
-The primary FPGA board. Houses a Lattice iCE40HX8K in a CT256 BGA package.
-Programmed via Raspberry Pi SPI using `flashrom`. The same SPI lines double as the
-runtime data path between FPGA and Pi (`spi_slave.v`).
+Lattice ECP5 FPGA on a compact module with a DDR-SODIMM-200P edge connector and a
+built-in iCELink DAPLink USB adapter (`0x0d28:0x0204`). Programmed via
+`openFPGALoader --cable cmsisdap` directly from the Pi 4 over USB — no SPI
+programmer needed.
+
+> `icesprog` does **not** work with the iCELink firmware — it expects VID `0x1d50`.
+> Use `openFPGALoader` instead.
+
+**Toolchain:** `yosys` → `nextpnr-ecp5` → `ecppack` → `openFPGALoader`
+
+**udev rule (run once on the host Pi):**
+```bash
+sudo tee /etc/udev/rules.d/99-icesugar.rules <<'EOF'
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0d28", ATTRS{idProduct}=="0204", MODE="0666", GROUP="plugdev"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0d28", ATTRS{idProduct}=="0204", MODE="0666", GROUP="plugdev"
+EOF
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+See [`ICE/icesugar-pro/docs/wiring.md`](ICE/icesugar-pro/docs/wiring.md) for LAN8720 ↔ ECP5 pin connections.
+
+---
+
+### FPGA — Olimex iCE40HX8K-EVB — *legacy / testing*
+
+Used during initial development. Houses a Lattice iCE40HX8K in a CT256 BGA package.
+Programmed via Pi SPI using `flashrom`; the same SPI lines double as the runtime
+data path (`spi_slave.v`). Superseded by the iCeSugar Pro for active development.
 
 **Toolchain:** `yosys` → `nextpnr-ice40` → `icepack` → `flashrom`
 
@@ -193,30 +263,6 @@ runtime data path between FPGA and Pi (`spi_slave.v`).
 
 ---
 
-### FPGA — iCESugar Pro (ECP5)
-
-Secondary / development board. Lattice ECP5 FPGA on a compact module with a
-DDR-SODIMM-200P edge connector and a built-in iCELink DAPLink USB adapter
-(`0x0d28:0x0204`). Programmed via `openFPGALoader --cable cmsisdap`.
-
-> `icesprog` does **not** work with the iCELink firmware — it expects VID `0x1d50`.
-> Use `openFPGALoader` instead.
-
-**Toolchain:** `yosys` → `nextpnr-ecp5` → `ecppack` → `openFPGALoader`
-
-**udev rule (run once):**
-```bash
-sudo tee /etc/udev/rules.d/99-icesugar.rules <<'EOF'
-SUBSYSTEM=="usb", ATTRS{idVendor}=="0d28", ATTRS{idProduct}=="0204", MODE="0666", GROUP="plugdev"
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0d28", ATTRS{idProduct}=="0204", MODE="0666", GROUP="plugdev"
-EOF
-sudo udevadm control --reload-rules && sudo udevadm trigger
-```
-
-See [`ICE/icesugar-pro/docs/wiring.md`](ICE/icesugar-pro/docs/wiring.md) for LAN8720 ↔ ECP5 pin connections.
-
----
-
 ### Ethernet PHY — LAN8720
 
 Low-power 10/100 Ethernet transceiver in a small breakout module. Provides the
@@ -227,11 +273,17 @@ Key signals: `RXD[1:0]`, `CRS_DV`, `TXD[1:0]`, `TX_EN`, `REF_CLK`, `MDIO`, `MDC`
 
 ---
 
-### Host — Raspberry Pi Zero 2W
+### Host — Raspberry Pi 4 *(current)* → CM4 8GB, 0GB eMMC *(target)*
 
 Runs the user-space software: reads captured frames from the FPGA over SPI (or
 SMI), drives the OLED display, handles button input, and bridges data to LoRa.
-Also acts as the FPGA programmer — `flashrom` writes bitstreams over `/dev/spidev0.0`.
+Also acts as the FPGA programmer — `openFPGALoader` programs the iCeSugar Pro
+directly over USB from the Pi 4.
+
+The Pi Zero 2W was used during initial testing but its limited RAM made
+on-device synthesis impractical. The Pi 4 is the current development host.
+The final target is a **Compute Module 4 (8GB RAM, 0GB eMMC / Lite)** for a
+compact embedded form factor.
 
 **Pi 40-pin header — signals used by this project**
 
