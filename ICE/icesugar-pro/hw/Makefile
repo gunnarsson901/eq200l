@@ -4,10 +4,13 @@ SPEED   = 6
 
 SRCS = \
     src/top.v \
+    src/frame_uart.v \
     ../sim_tap/src/phy_bridge.v \
     ../../lib/rmii_rx.v \
     ../../lib/rmii_tx.v \
-    ../../lib/async_fifo.v
+    ../../lib/async_fifo.v \
+    ../../lib/sync_fifo.v \
+    ../../lib/uart_tx.v
 
 BUILD = build
 
@@ -30,9 +33,20 @@ $(BUILD)/routed.config: $(BUILD)/synth.json top.lpf | $(BUILD)/
 $(BUILD)/top.bit: $(BUILD)/routed.config | $(BUILD)/
 	ecppack $< $@
 
-# Flash via iCELink (CMSIS-DAP)
+# Flash via iCELink module USB-C (use module port, NOT the host-board port)
+# icesprog requires VID:PID 0x1d50:0x602b (MuseLab firmware on module USB-C)
+# Run directly on the Pi (no SSH)
+program: $(BUILD)/top.bit
+	icesprog -j 1 && icesprog -w $(BUILD)/top.bit
+
+# Flash from laptop — assumes top.bit already on Pi at /tmp/top.bit
 flash: $(BUILD)/top.bit
-	openFPGALoader --cable cmsisdap $(BUILD)/top.bit
+	ssh phoenix@192.168.10.238 "icesprog -j 1 && icesprog -w /tmp/top.bit"
+
+# Upload from laptop — copies bitstream then flashes
+upload: $(BUILD)/top.bit
+	scp $(BUILD)/top.bit phoenix@192.168.10.238:/tmp/top.bit && \
+	ssh phoenix@192.168.10.238 "icesprog -j 1 && icesprog -w /tmp/top.bit"
 
 $(BUILD)/:
 	mkdir -p $(BUILD)
