@@ -19,9 +19,9 @@ LOCATE COMP "e1_txd[0]"   SITE "P1";
 LOCATE COMP "e1_txd[1]"   SITE "P2";
 
 IOBUF PORT "e1_ref_clk"  IO_TYPE=LVCMOS33;
-IOBUF PORT "e1_crs_dv"   IO_TYPE=LVCMOS33;
-IOBUF PORT "e1_rxd[0]"   IO_TYPE=LVCMOS33;
-IOBUF PORT "e1_rxd[1]"   IO_TYPE=LVCMOS33;
+IOBUF PORT "e1_crs_dv"   IO_TYPE=LVCMOS33 PULLMODE=DOWN;
+IOBUF PORT "e1_rxd[0]"   IO_TYPE=LVCMOS33 PULLMODE=DOWN;
+IOBUF PORT "e1_rxd[1]"   IO_TYPE=LVCMOS33 PULLMODE=DOWN;
 IOBUF PORT "e1_txen"     IO_TYPE=LVCMOS33;
 IOBUF PORT "e1_txd[0]"   IO_TYPE=LVCMOS33;
 IOBUF PORT "e1_txd[1]"   IO_TYPE=LVCMOS33;
@@ -40,14 +40,25 @@ LOCATE COMP "e2_txd[0]"   SITE "B5";
 LOCATE COMP "e2_txd[1]"   SITE "A4";
 
 IOBUF PORT "e2_ref_clk"  IO_TYPE=LVCMOS33;
-IOBUF PORT "e2_crs_dv"   IO_TYPE=LVCMOS33;
-IOBUF PORT "e2_rxd[0]"   IO_TYPE=LVCMOS33;
-IOBUF PORT "e2_rxd[1]"   IO_TYPE=LVCMOS33;
+IOBUF PORT "e2_crs_dv"   IO_TYPE=LVCMOS33 PULLMODE=DOWN;
+IOBUF PORT "e2_rxd[0]"   IO_TYPE=LVCMOS33 PULLMODE=DOWN;
+IOBUF PORT "e2_rxd[1]"   IO_TYPE=LVCMOS33 PULLMODE=DOWN;
 IOBUF PORT "e2_txen"     IO_TYPE=LVCMOS33;
 IOBUF PORT "e2_txd[0]"   IO_TYPE=LVCMOS33;
 IOBUF PORT "e2_txd[1]"   IO_TYPE=LVCMOS33;
 
 FREQUENCY PORT "e2_ref_clk" 50.0 MHz;
+
+# ==================================================================
+# UART capture — P5 GPIO header (SODIMM pins 71 / 73)
+# uart_tx (B3, SODIMM 73) → Pi GPIO 15 physical pin 10 (/dev/serial0 RX)
+# uart_rx (A3, SODIMM 71) → Pi GPIO 14 physical pin 8  (/dev/serial0 TX)
+# Pi setup: stty -F /dev/serial0 1000000 raw -echo
+# ==================================================================
+LOCATE COMP "uart_tx"  SITE "B3";
+LOCATE COMP "uart_rx"  SITE "A3";
+IOBUF PORT "uart_tx"   IO_TYPE=LVCMOS33;
+IOBUF PORT "uart_rx"   IO_TYPE=LVCMOS33;
 
 # ==================================================================
 # Onboard RGB LED (active-low)
