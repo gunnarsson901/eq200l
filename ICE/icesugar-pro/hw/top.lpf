@@ -50,6 +50,22 @@ IOBUF PORT "e2_txd[1]"   IO_TYPE=LVCMOS33;
 FREQUENCY PORT "e2_ref_clk" 50.0 MHz;
 
 # ==================================================================
+# ETH1 MDIO/MDC — P2 connector
+# ==================================================================
+LOCATE COMP "e1_mdc"   SITE "G2";
+LOCATE COMP "e1_mdio"  SITE "K1";
+IOBUF PORT "e1_mdc"    IO_TYPE=LVCMOS33;
+IOBUF PORT "e1_mdio"   IO_TYPE=LVCMOS33;
+
+# ==================================================================
+# ETH2 MDIO/MDC — P3 connector
+# ==================================================================
+LOCATE COMP "e2_mdc"   SITE "A8";
+LOCATE COMP "e2_mdio"  SITE "B8";
+IOBUF PORT "e2_mdc"    IO_TYPE=LVCMOS33;
+IOBUF PORT "e2_mdio"   IO_TYPE=LVCMOS33;
+
+# ==================================================================
 # UART capture — P5 GPIO header (SODIMM pins 71 / 73)
 # uart_tx (B3, SODIMM 73) → Pi GPIO 15 physical pin 10 (/dev/serial0 RX)
 # uart_rx (A3, SODIMM 71) → Pi GPIO 14 physical pin 8  (/dev/serial0 TX)

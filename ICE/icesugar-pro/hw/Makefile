@@ -10,7 +10,8 @@ SRCS = \
     ../../lib/rmii_tx.v \
     ../../lib/async_fifo.v \
     ../../lib/bram_fifo.v \
-    ../../lib/uart_tx.v
+    ../../lib/uart_tx.v \
+    ../../lib/mdio_master.v
 
 BUILD = build
 

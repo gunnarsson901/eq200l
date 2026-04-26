@@ -9,12 +9,20 @@ module top (
     output wire        e1_txen,          // transmit enable             (N3)
     output wire [1:0]  e1_txd,           // transmit data [0]=P1, [1]=P2(ball)
 
+    // ETH1 MDIO/MDC — P2 connector
+    output wire        e1_mdc,
+    inout  wire        e1_mdio,
+
     // ETH2 RMII — P3 connector (LAN8720 ETH2, Router)
     input  wire        e2_ref_clk,       // 50 MHz ref clock from PHY  (A7)
     input  wire        e2_crs_dv,        // carrier sense / data valid  (B7)
     input  wire [1:0]  e2_rxd,           // receive data  [0]=A6, [1]=B6
     output wire        e2_txen,          // transmit enable             (A5)
     output wire [1:0]  e2_txd,           // transmit data [0]=B5, [1]=A4
+
+    // ETH2 MDIO/MDC — P3 connector
+    output wire        e2_mdc,
+    inout  wire        e2_mdio,
 
     // UART capture — P5 GPIO header
     // Connect uart_tx (A3, SODIMM 71) → Pi GPIO 15 (physical pin 10, /dev/serial0 RX)
@@ -339,6 +347,107 @@ module top (
     );
 
     // ==================================================================
+    // MDIO — PHY management
+    //   Polls Basic Status Register (reg 1, bit 2 = link up) every ~1 s.
+    //   CLK_DIV=12 → MDC = 25 MHz / 24 ≈ 1 MHz
+    // ==================================================================
+    wire e1_mdio_oe, e1_mdio_out, e1_mdio_in;
+    wire e2_mdio_oe, e2_mdio_out, e2_mdio_in;
+
+    assign e1_mdio    = e1_mdio_oe ? e1_mdio_out : 1'bz;
+    assign e1_mdio_in = e1_mdio;
+    assign e2_mdio    = e2_mdio_oe ? e2_mdio_out : 1'bz;
+    assign e2_mdio_in = e2_mdio;
+
+    wire        m1_busy, m1_done, m1_rdata_valid;
+    reg         m1_req;
+    wire [15:0] m1_rdata;
+    reg  [4:0]  m1_reg_addr;
+
+    mdio_master #(.CLK_DIV(12), .PHY_ADDR(5'd0)) mdio1 (
+        .clk(clk_sys), .rst_n(rst_n),
+        .mdc(e1_mdc), .mdio_oe(e1_mdio_oe),
+        .mdio_out(e1_mdio_out), .mdio_in(e1_mdio_in),
+        .req(m1_req), .wr(1'b0), .reg_addr(m1_reg_addr), .wdata(16'h0),
+        .busy(m1_busy), .done(m1_done), .rdata(m1_rdata), .rdata_valid(m1_rdata_valid)
+    );
+
+    wire        m2_busy, m2_done, m2_rdata_valid;
+    reg         m2_req;
+    wire [15:0] m2_rdata;
+    reg  [4:0]  m2_reg_addr;
+
+    mdio_master #(.CLK_DIV(12), .PHY_ADDR(5'd0)) mdio2 (
+        .clk(clk_sys), .rst_n(rst_n),
+        .mdc(e2_mdc), .mdio_oe(e2_mdio_oe),
+        .mdio_out(e2_mdio_out), .mdio_in(e2_mdio_in),
+        .req(m2_req), .wr(1'b0), .reg_addr(m2_reg_addr), .wdata(16'h0),
+        .busy(m2_busy), .done(m2_done), .rdata(m2_rdata), .rdata_valid(m2_rdata_valid)
+    );
+
+    // Poll sequencer
+    reg [1:0]  link_up;      // [0]=PHY1 (ETH1/Pi), [1]=PHY2 (ETH2/Router)
+    reg [24:0] poll_timer;
+    reg [2:0]  poll_state;
+
+    localparam PL_PWRUP = 3'd0;   // 100 ms PHY powerup hold
+    localparam PL_RD1   = 3'd1;
+    localparam PL_WAIT1 = 3'd2;
+    localparam PL_RD2   = 3'd3;
+    localparam PL_WAIT2 = 3'd4;
+    localparam PL_IDLE  = 3'd5;   // 1 s between polls
+
+    always @(posedge clk_sys or negedge rst_n) begin
+        if (!rst_n) begin
+            poll_state  <= PL_PWRUP;
+            poll_timer  <= 0;
+            link_up     <= 2'b00;
+            m1_req      <= 0;  m1_reg_addr <= 5'd1;
+            m2_req      <= 0;  m2_reg_addr <= 5'd1;
+        end else begin
+            m1_req <= 0;
+            m2_req <= 0;
+            case (poll_state)
+                PL_PWRUP: begin
+                    if (poll_timer == 25'd2_499_999) begin  // 100 ms
+                        poll_timer <= 0;
+                        poll_state <= PL_RD1;
+                    end else
+                        poll_timer <= poll_timer + 1;
+                end
+                PL_RD1: begin
+                    m1_req     <= 1;
+                    poll_state <= PL_WAIT1;
+                end
+                PL_WAIT1: begin
+                    if (m1_rdata_valid) begin
+                        link_up[0] <= m1_rdata[2];   // BSR bit 2 = link status
+                        poll_state <= PL_RD2;
+                    end
+                end
+                PL_RD2: begin
+                    m2_req     <= 1;
+                    poll_state <= PL_WAIT2;
+                end
+                PL_WAIT2: begin
+                    if (m2_rdata_valid) begin
+                        link_up[1] <= m2_rdata[2];
+                        poll_state <= PL_IDLE;
+                    end
+                end
+                PL_IDLE: begin
+                    if (poll_timer == 25'd24_999_999) begin  // 1 s
+                        poll_timer <= 0;
+                        poll_state <= PL_RD1;
+                    end else
+                        poll_timer <= poll_timer + 1;
+                end
+                default: poll_state <= PL_PWRUP;
+            endcase
+        end
+    end
+
+    // ==================================================================
     // LEDs (active-low)
     //   R: on during reset
     //   G: ETH1 RX activity (Pi side)
@@ -360,7 +469,7 @@ module top (
     end
 
     assign led_r = ~rst_n;
-    assign led_g = ~|e1_stretch;
-    assign led_b = ~|e2_stretch;
+    assign led_g = link_up[0] ? ~|e1_stretch : 1'b1;  // off = no ETH1 link
+    assign led_b = link_up[1] ? ~|e2_stretch : 1'b1;  // off = no ETH2 link
 
 endmodule
