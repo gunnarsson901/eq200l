@@ -9,12 +9,12 @@ SRCS = \
     ../../lib/rmii_rx.v \
     ../../lib/rmii_tx.v \
     ../../lib/async_fifo.v \
-    ../../lib/sync_fifo.v \
+    ../../lib/bram_fifo.v \
     ../../lib/uart_tx.v
 
 BUILD = build
 
-.PHONY: all synth pnr pack flash clean
+.PHONY: all synth pnr pack program flash upload clean
 
 all: $(BUILD)/top.bit
 

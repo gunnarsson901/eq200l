@@ -2,19 +2,25 @@
 module top (
     input  wire        clk_25m,          // 25 MHz onboard oscillator (P6)
 
-    // ETH1 RMII — P2 connector (LAN8720 ETH1)
+    // ETH1 RMII — P2 connector (LAN8720 ETH1, Pi 4)
     input  wire        e1_ref_clk,       // 50 MHz ref clock from PHY  (L2)
     input  wire        e1_crs_dv,        // carrier sense / data valid  (M1)
     input  wire [1:0]  e1_rxd,           // receive data  [0]=M2, [1]=N1
     output wire        e1_txen,          // transmit enable             (N3)
     output wire [1:0]  e1_txd,           // transmit data [0]=P1, [1]=P2(ball)
 
-    // ETH2 RMII — P3 connector (LAN8720 ETH2)
+    // ETH2 RMII — P3 connector (LAN8720 ETH2, Router)
     input  wire        e2_ref_clk,       // 50 MHz ref clock from PHY  (A7)
     input  wire        e2_crs_dv,        // carrier sense / data valid  (B7)
     input  wire [1:0]  e2_rxd,           // receive data  [0]=A6, [1]=B6
     output wire        e2_txen,          // transmit enable             (A5)
     output wire [1:0]  e2_txd,           // transmit data [0]=B5, [1]=A4
+
+    // UART capture — P5 GPIO header
+    // Connect uart_tx (A3, SODIMM 71) → Pi GPIO 15 (physical pin 10, /dev/serial0 RX)
+    // Connect uart_rx (B3, SODIMM 73) → Pi GPIO 14 (physical pin 8,  /dev/serial0 TX)
+    output wire        uart_tx,          // B3 — captured frames to Pi
+    input  wire        uart_rx,          // A3 — commands from Pi (future)
 
     // Onboard RGB LED (active-low)
     output wire        led_r,            // A11
@@ -23,13 +29,11 @@ module top (
 );
 
     // ==================================================================
-    // System clock: 25 MHz crystal directly (no PLL needed)
-    // Bridge processes one byte/cycle; RMII delivers one byte per 4 PHY
-    // cycles (~80 ns), so 25 MHz (40 ns) has 2x headroom.
+    // System clock: 25 MHz crystal directly
     // ==================================================================
     wire clk_sys = clk_25m;
 
-    // Simple power-on reset: hold rst_n low for 16 cycles after config
+    // Power-on reset: hold rst_n low for 16 cycles after FPGA config
     reg [3:0] rst_ctr = 4'd0;
     wire rst_n = rst_ctr[3];
     always @(posedge clk_sys)
@@ -113,9 +117,9 @@ module top (
 
     // ==================================================================
     // PHY Bridge  (clk_sys domain)
-    //   p1 = ETH1,  p2 = ETH2
-    //   p1_tx = data forwarded E2→E1
-    //   p2_tx = data forwarded E1→E2
+    //   p1 = ETH1 (Pi),  p2 = ETH2 (Router)
+    //   p1_tx = E2→E1 forwarded,  p2_tx = E1→E2 forwarded
+    //   p3 = mirror of both directions → UART capture
     // ==================================================================
     wire br_e1_rx_ready, br_e2_rx_ready;
 
@@ -123,8 +127,11 @@ module top (
     wire [7:0]  br_p1_tx_data;
     wire        br_p2_tx_valid, br_p2_tx_sof, br_p2_tx_eof;
     wire [7:0]  br_p2_tx_data;
+    wire        br_p3_tx_valid, br_p3_tx_sof, br_p3_tx_eof, br_p3_tx_dir;
+    wire [7:0]  br_p3_tx_data;
 
     wire        e1_tx_fifo_full, e2_tx_fifo_full;
+    wire        cap_fifo_full;
 
     assign e1_rx_fifo_rd_en = br_e1_rx_ready;
     assign e2_rx_fifo_rd_en = br_e2_rx_ready;
@@ -151,12 +158,10 @@ module top (
         .p2_tx_sof    (br_p2_tx_sof),   .p2_tx_eof (br_p2_tx_eof),
         .p2_tx_ready  (!e2_tx_fifo_full),
 
-        // P3 monitor: not wired in this design (TODO: UART capture)
-        .p3_tx_valid  (),
-        .p3_tx_data   (),
-        .p3_tx_sof    (),
-        .p3_tx_eof    (),
-        .p3_tx_ready  (1'b1),
+        .p3_tx_valid  (br_p3_tx_valid), .p3_tx_data(br_p3_tx_data),
+        .p3_tx_sof    (br_p3_tx_sof),   .p3_tx_eof (br_p3_tx_eof),
+        .p3_tx_dir    (br_p3_tx_dir),
+        .p3_tx_ready  (!cap_fifo_full),
 
         .mitm_en      (1'b0),
         .mitm_byte_idx(8'd0),
@@ -170,7 +175,6 @@ module top (
 
     // ==================================================================
     // ETH1 TX  (clk_sys → e1_ref_clk via async FIFO → rmii_tx)
-    // Carries E2→E1 forwarded frames (bridge p1_tx output)
     // ==================================================================
     wire [8:0]  e1_tx_fifo_wdata = {br_p1_tx_eof, br_p1_tx_data};
     wire        e1_tx_fifo_empty;
@@ -189,7 +193,6 @@ module top (
     );
 
     wire e1_tx_ready;
-
     rmii_tx e1_tx_inst (
         .clk     (e1_ref_clk),
         .rst_n   (rst_n),
@@ -200,12 +203,10 @@ module top (
         .txen    (e1_txen),
         .txd     (e1_txd)
     );
-
     assign e1_tx_fifo_rd_en = e1_tx_ready;
 
     // ==================================================================
     // ETH2 TX  (clk_sys → e2_ref_clk via async FIFO → rmii_tx)
-    // Carries E1→E2 forwarded frames (bridge p2_tx output)
     // ==================================================================
     wire [8:0]  e2_tx_fifo_wdata = {br_p2_tx_eof, br_p2_tx_data};
     wire        e2_tx_fifo_empty;
@@ -224,7 +225,6 @@ module top (
     );
 
     wire e2_tx_ready;
-
     rmii_tx e2_tx_inst (
         .clk     (e2_ref_clk),
         .rst_n   (rst_n),
@@ -235,14 +235,114 @@ module top (
         .txen    (e2_txen),
         .txd     (e2_txd)
     );
-
     assign e2_tx_fifo_rd_en = e2_tx_ready;
 
     // ==================================================================
+    // UART Capture Path
+    //   P3 mirror → capture FIFO → frame_uart → uart_tx pin
+    //   Frame format: 0xAA 0x55 | data (0xAA→0xAA 0x00) | 0xAA 0x56
+    //   Baud: 1 Mbit/s  — on Pi: stty -F /dev/serial0 1000000 raw
+    // ==================================================================
+    // 11-bit entries: {dir, sof, eof, data[7:0]}
+    // depth 2048 holds >1 full max-size Ethernet frame (1518 bytes) per direction
+    wire [10:0] cap_fifo_wdata = {br_p3_tx_dir, br_p3_tx_sof, br_p3_tx_eof, br_p3_tx_data};
+    wire        cap_fifo_empty;
+    wire [10:0] cap_fifo_rdata;
+    wire        cap_fifo_rd_en;
+
+    bram_fifo #(.DATA_W(11), .DEPTH(2048), .ADDR_W(11)) cap_fifo (
+        .clk     (clk_sys),
+        .rst_n   (rst_n),
+        .wr_en   (br_p3_tx_valid && !cap_fifo_full),
+        .wr_data (cap_fifo_wdata),
+        .wr_full (cap_fifo_full),
+        .rd_en   (cap_fifo_rd_en),
+        .rd_data (cap_fifo_rdata),
+        .rd_empty(cap_fifo_empty)
+    );
+
+    // Beacon: send 0xDE 0xAD 0xBE 0xEF every ~1s when cap_fifo is empty,
+    // so we can verify the uart_tx wire works regardless of Ethernet traffic.
+    reg [24:0] bcn_cnt;
+    reg [2:0]  bcn_state;
+    reg        bcn_valid, bcn_sof, bcn_eof;
+    reg [7:0]  bcn_data;
+    localparam BCN_IDLE=3'd0, BCN_B0=3'd1, BCN_B1=3'd2,
+               BCN_B2=3'd3,   BCN_B3=3'd4;
+
+    wire        fu_in_ready;
+    wire        use_bcn = bcn_valid && cap_fifo_empty;
+    wire        fu_in_valid = use_bcn ? 1'b1          : !cap_fifo_empty;
+    wire        fu_in_sof   = use_bcn ? bcn_sof       : cap_fifo_rdata[9];
+    wire        fu_in_eof   = use_bcn ? bcn_eof       : cap_fifo_rdata[8];
+    wire [7:0]  fu_in_data  = use_bcn ? bcn_data      : cap_fifo_rdata[7:0];
+    wire        fu_in_dir   = use_bcn ? 1'b0          : cap_fifo_rdata[10];
+    assign      cap_fifo_rd_en = !use_bcn && fu_in_ready;
+
+    always @(posedge clk_sys or negedge rst_n) begin
+        if (!rst_n) begin
+            bcn_cnt   <= 0;
+            bcn_state <= BCN_IDLE;
+            bcn_valid <= 1'b0;
+            bcn_sof   <= 1'b0;
+            bcn_eof   <= 1'b0;
+            bcn_data  <= 8'h00;
+        end else begin
+            case (bcn_state)
+                BCN_IDLE: begin
+                    bcn_valid <= 1'b0;
+                    if (bcn_cnt == 25'd24_999_999) begin
+                        bcn_cnt   <= 0;
+                        bcn_state <= BCN_B0;
+                        bcn_valid <= 1'b1;
+                        bcn_sof   <= 1'b1;
+                        bcn_eof   <= 1'b0;
+                        bcn_data  <= 8'h42;   // 'B'
+                    end else
+                        bcn_cnt <= bcn_cnt + 1;
+                end
+                BCN_B0: if (use_bcn && fu_in_ready) begin
+                    bcn_sof   <= 1'b0;
+                    bcn_data  <= 8'h45;   // 'E'
+                    bcn_state <= BCN_B1;
+                end
+                BCN_B1: if (use_bcn && fu_in_ready) begin
+                    bcn_data  <= 8'h45;   // 'E'
+                    bcn_state <= BCN_B2;
+                end
+                BCN_B2: if (use_bcn && fu_in_ready) begin
+                    bcn_data  <= 8'h46;   // 'F'
+                    bcn_eof   <= 1'b1;
+                    bcn_state <= BCN_B3;
+                end
+                BCN_B3: if (use_bcn && fu_in_ready) begin
+                    bcn_valid <= 1'b0;
+                    bcn_eof   <= 1'b0;
+                    bcn_state <= BCN_IDLE;
+                end
+                default: bcn_state <= BCN_IDLE;
+            endcase
+        end
+    end
+
+    frame_uart #(.CLK_HZ(25_000_000), .BAUD(1_000_000)) fu (
+        .clk      (clk_sys),
+        .rst_n    (rst_n),
+        .in_valid (fu_in_valid),
+        .in_data  (fu_in_data),
+        .in_sof   (fu_in_sof),
+        .in_eof   (fu_in_eof),
+        .in_dir   (fu_in_dir),
+        .in_ready (fu_in_ready),
+        .tx       (uart_tx),
+        .rx       (uart_rx)
+    );
+
+    // ==================================================================
     // LEDs (active-low)
-    //   R: off once PLL locks
-    //   G: pulses on ETH1 RX activity
-    //   B: pulses on ETH2 RX activity
+    //   R: on during reset
+    //   G: ETH1 RX activity (Pi side)
+    //   B: ETH2 RX activity (Router side)
     // ==================================================================
     reg [19:0] e1_stretch, e2_stretch;
 
@@ -259,8 +359,8 @@ module top (
         end
     end
 
-    assign led_r = ~rst_n;          // lights during reset, off once running
-    assign led_g = ~|e1_stretch;    // ETH1 activity
-    assign led_b = ~|e2_stretch;    // ETH2 activity
+    assign led_r = ~rst_n;
+    assign led_g = ~|e1_stretch;
+    assign led_b = ~|e2_stretch;
 
 endmodule

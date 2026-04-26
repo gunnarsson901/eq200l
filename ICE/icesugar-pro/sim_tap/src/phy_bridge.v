@@ -51,6 +51,7 @@ module phy_bridge (
     output reg  [7:0]  p3_tx_data,
     output reg         p3_tx_sof,
     output reg         p3_tx_eof,
+    output reg         p3_tx_dir,    // 0 = P1→P2 (Pi side), 1 = P2→P1 (Router side)
     input  wire        p3_tx_ready,
 
     // --- Control registers (from smi_slave, CDC already applied) ---
@@ -181,6 +182,7 @@ module phy_bridge (
             p3_tx_data  <= 0;
             p3_tx_sof   <= 0;
             p3_tx_eof   <= 0;
+            p3_tx_dir   <= 0;
         end else begin
             p3_tx_valid <= 0;
             p3_tx_sof   <= 0;
@@ -192,11 +194,13 @@ module phy_bridge (
                     p3_tx_data  <= p1_rx_data;
                     p3_tx_sof   <= p1_rx_sof;
                     p3_tx_eof   <= p1_rx_eof;
+                    p3_tx_dir   <= 0;
                 end else if (p2_rx_valid) begin
                     p3_tx_valid <= 1;
                     p3_tx_data  <= p2_rx_data;
                     p3_tx_sof   <= p2_rx_sof;
                     p3_tx_eof   <= p2_rx_eof;
+                    p3_tx_dir   <= 1;
                 end
             end
         end
