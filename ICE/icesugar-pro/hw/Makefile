@@ -11,7 +11,8 @@ SRCS = \
     ../../lib/async_fifo.v \
     ../../lib/bram_fifo.v \
     ../../lib/uart_tx.v \
-    ../../lib/mdio_master.v
+    ../../lib/mdio_master.v \
+    ../../lib/spi_slave.v
 
 BUILD = build
 

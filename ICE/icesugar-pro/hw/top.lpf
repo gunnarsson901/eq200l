@@ -18,7 +18,7 @@ LOCATE COMP "e1_txen"     SITE "N3";
 LOCATE COMP "e1_txd[0]"   SITE "P1";
 LOCATE COMP "e1_txd[1]"   SITE "P2";
 
-IOBUF PORT "e1_ref_clk"  IO_TYPE=LVCMOS33;
+IOBUF PORT "e1_ref_clk"  IO_TYPE=LVCMOS33 PULLMODE=DOWN;
 IOBUF PORT "e1_crs_dv"   IO_TYPE=LVCMOS33 PULLMODE=DOWN;
 IOBUF PORT "e1_rxd[0]"   IO_TYPE=LVCMOS33 PULLMODE=DOWN;
 IOBUF PORT "e1_rxd[1]"   IO_TYPE=LVCMOS33 PULLMODE=DOWN;
@@ -30,16 +30,17 @@ FREQUENCY PORT "e1_ref_clk" 50.0 MHz;
 
 # ==================================================================
 # ETH2 RMII — P3 connector on BRB → LAN8720 ETH2
+# LAN8720 outputs 50 MHz REFCLKO on B7 from onboard XTS 50MHz crystal
 # ==================================================================
-LOCATE COMP "e2_ref_clk"  SITE "A7";
-LOCATE COMP "e2_crs_dv"   SITE "B7";
-LOCATE COMP "e2_rxd[0]"   SITE "A6";
-LOCATE COMP "e2_rxd[1]"   SITE "B6";
-LOCATE COMP "e2_txen"     SITE "A5";
-LOCATE COMP "e2_txd[0]"   SITE "B5";
-LOCATE COMP "e2_txd[1]"   SITE "A4";
+LOCATE COMP "e2_ref_clk"  SITE "B7";
+LOCATE COMP "e2_crs_dv"   SITE "A7";
+LOCATE COMP "e2_rxd[0]"   SITE "B6";
+LOCATE COMP "e2_rxd[1]"   SITE "A6";
+LOCATE COMP "e2_txen"     SITE "B5";
+LOCATE COMP "e2_txd[0]"   SITE "A5";
+LOCATE COMP "e2_txd[1]"   SITE "B4";
 
-IOBUF PORT "e2_ref_clk"  IO_TYPE=LVCMOS33;
+IOBUF PORT "e2_ref_clk"  IO_TYPE=LVCMOS33 PULLMODE=DOWN;
 IOBUF PORT "e2_crs_dv"   IO_TYPE=LVCMOS33 PULLMODE=DOWN;
 IOBUF PORT "e2_rxd[0]"   IO_TYPE=LVCMOS33 PULLMODE=DOWN;
 IOBUF PORT "e2_rxd[1]"   IO_TYPE=LVCMOS33 PULLMODE=DOWN;
@@ -75,6 +76,20 @@ LOCATE COMP "uart_tx"  SITE "B3";
 LOCATE COMP "uart_rx"  SITE "A3";
 IOBUF PORT "uart_tx"   IO_TYPE=LVCMOS33;
 IOBUF PORT "uart_rx"   IO_TYPE=LVCMOS33;
+
+# ==================================================================
+# SPI — Pi master → FPGA slave
+# Pi SPI0: MOSI=GPIO10 MISO=GPIO9 SCLK=GPIO11 CS=GPIO24
+# ==================================================================
+LOCATE COMP "spi_sclk"  SITE "D1";
+LOCATE COMP "spi_mosi"  SITE "E1";
+LOCATE COMP "spi_miso"  SITE "F2";
+LOCATE COMP "spi_cs_n"  SITE "C2";
+
+IOBUF PORT "spi_sclk"  IO_TYPE=LVCMOS33 PULLMODE=DOWN;
+IOBUF PORT "spi_mosi"  IO_TYPE=LVCMOS33 PULLMODE=DOWN;
+IOBUF PORT "spi_miso"  IO_TYPE=LVCMOS33;
+IOBUF PORT "spi_cs_n"  IO_TYPE=LVCMOS33 PULLMODE=UP;
 
 # ==================================================================
 # Onboard RGB LED (active-low)

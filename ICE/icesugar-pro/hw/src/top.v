@@ -13,9 +13,9 @@ module top (
     output wire        e1_mdc,
     inout  wire        e1_mdio,
 
-    // ETH2 RMII — P3 connector (LAN8720 ETH2, Router)
-    input  wire        e2_ref_clk,       // 50 MHz ref clock from PHY  (A7)
-    input  wire        e2_crs_dv,        // carrier sense / data valid  (B7)
+    // ETH2 RMII — P3 connector on BRB → LAN8720 ETH2
+    input  wire        e2_ref_clk,       // 50 MHz REFCLKO from LAN8720 XTS crystal (B7)
+    input  wire        e2_crs_dv,        // carrier sense / data valid  (A7)
     input  wire [1:0]  e2_rxd,           // receive data  [0]=A6, [1]=B6
     output wire        e2_txen,          // transmit enable             (A5)
     output wire [1:0]  e2_txd,           // transmit data [0]=B5, [1]=A4
@@ -25,10 +25,17 @@ module top (
     inout  wire        e2_mdio,
 
     // UART capture — P5 GPIO header
-    // Connect uart_tx (A3, SODIMM 71) → Pi GPIO 15 (physical pin 10, /dev/serial0 RX)
-    // Connect uart_rx (B3, SODIMM 73) → Pi GPIO 14 (physical pin 8,  /dev/serial0 TX)
-    output wire        uart_tx,          // B3 — captured frames to Pi
-    input  wire        uart_rx,          // A3 — commands from Pi (future)
+    // uart_tx (B3, SODIMM 73) → Pi GPIO 15 (physical pin 10, /dev/serial0 RX)
+    // uart_rx (A3, SODIMM 71) ← Pi GPIO 14 (physical pin 8,  /dev/serial0 TX) [optional]
+    output wire        uart_tx,          // B3 SODIMM-73 — captured frames to Pi
+    input  wire        uart_rx,          // A3 SODIMM-71 — commands from Pi (future)
+
+    // SPI — Pi master, FPGA slave
+    // Pi SPI0: MOSI=GPIO10, MISO=GPIO9, SCLK=GPIO11, CS=GPIO24
+    input  wire        spi_sclk,         // D1
+    input  wire        spi_mosi,         // E1 (ignored for now — receive-only slave)
+    output wire        spi_miso,         // F2
+    input  wire        spi_cs_n,         // C2
 
     // Onboard RGB LED (active-low)
     output wire        led_r,            // A11
@@ -160,11 +167,11 @@ module top (
 
         .p1_tx_valid  (br_p1_tx_valid), .p1_tx_data(br_p1_tx_data),
         .p1_tx_sof    (br_p1_tx_sof),   .p1_tx_eof (br_p1_tx_eof),
-        .p1_tx_ready  (!e1_tx_fifo_full),
+        .p1_tx_ready  (1'b1),            // ETH1 not connected — always drain ETH2
 
         .p2_tx_valid  (br_p2_tx_valid), .p2_tx_data(br_p2_tx_data),
         .p2_tx_sof    (br_p2_tx_sof),   .p2_tx_eof (br_p2_tx_eof),
-        .p2_tx_ready  (!e2_tx_fifo_full),
+        .p2_tx_ready  (1'b1),            // ETH2 not connected — always drain ETH1
 
         .p3_tx_valid  (br_p3_tx_valid), .p3_tx_data(br_p3_tx_data),
         .p3_tx_sof    (br_p3_tx_sof),   .p3_tx_eof (br_p3_tx_eof),
@@ -226,7 +233,7 @@ module top (
         .wr_en   (br_p2_tx_valid && !e2_tx_fifo_full),
         .wr_data (e2_tx_fifo_wdata),
         .wr_full (e2_tx_fifo_full),
-        .rd_clk  (e2_ref_clk),  .rd_rst_n(rst_n),
+        .rd_clk  (e2_ref_clk),     .rd_rst_n(rst_n),
         .rd_en   (e2_tx_fifo_rd_en),
         .rd_data (e2_tx_fifo_rdata),
         .rd_empty(e2_tx_fifo_empty)
@@ -280,12 +287,12 @@ module top (
 
     wire        fu_in_ready;
     wire        use_bcn = bcn_valid && cap_fifo_empty;
-    wire        fu_in_valid = use_bcn ? 1'b1          : !cap_fifo_empty;
+    wire        fu_in_valid = 1'b0;   // UART disabled — SPI handles capture
     wire        fu_in_sof   = use_bcn ? bcn_sof       : cap_fifo_rdata[9];
     wire        fu_in_eof   = use_bcn ? bcn_eof       : cap_fifo_rdata[8];
     wire [7:0]  fu_in_data  = use_bcn ? bcn_data      : cap_fifo_rdata[7:0];
     wire        fu_in_dir   = use_bcn ? 1'b0          : cap_fifo_rdata[10];
-    assign      cap_fifo_rd_en = !use_bcn && fu_in_ready;
+    assign      cap_fifo_rd_en = (spi_state == SP_DATA) && spi_fifo_rd && !cap_fifo_empty;
 
     always @(posedge clk_sys or negedge rst_n) begin
         if (!rst_n) begin
@@ -421,7 +428,8 @@ module top (
                 end
                 PL_WAIT1: begin
                     if (m1_rdata_valid) begin
-                        link_up[0] <= m1_rdata[2];   // BSR bit 2 = link status
+                        // 0xFFFF = floating mdio_in (no PHY); treat as link-down
+                        link_up[0] <= (m1_rdata != 16'hFFFF) && m1_rdata[2];
                         poll_state <= PL_RD2;
                     end
                 end
@@ -431,7 +439,7 @@ module top (
                 end
                 PL_WAIT2: begin
                     if (m2_rdata_valid) begin
-                        link_up[1] <= m2_rdata[2];
+                        link_up[1] <= (m2_rdata != 16'hFFFF) && m2_rdata[2];
                         poll_state <= PL_IDLE;
                     end
                 end
@@ -469,7 +477,59 @@ module top (
     end
 
     assign led_r = ~rst_n;
-    assign led_g = link_up[0] ? ~|e1_stretch : 1'b1;  // off = no ETH1 link
-    assign led_b = link_up[1] ? ~|e2_stretch : 1'b1;  // off = no ETH2 link
+    assign led_g = link_up[1] ? ~|e2_stretch : 1'b1;  // blinks on ETH2 RX
+    assign led_b = ~link_up[1];                        // on = ETH2 link down
+
+    // ==================================================================
+    // SPI Capture Path
+    //   Streams cap_fifo to Pi with 0xFE SOF markers between frames.
+    //   Idle output: 0xFF (spi_slave default when fifo_empty).
+    //   Frame wire format: 0xFE <data bytes...>  (next frame: 0xFE ...)
+    // ==================================================================
+    localparam SP_IDLE = 2'd0;
+    localparam SP_SOF  = 2'd1;
+    localparam SP_DATA = 2'd2;
+
+    reg  [1:0] spi_state;
+    wire       spi_fifo_rd;
+
+    wire [7:0] spi_byte_out = (spi_state == SP_SOF) ? 8'hFE : cap_fifo_rdata[7:0];
+    wire       spi_byte_vld = (spi_state == SP_SOF) ||
+                              (spi_state == SP_DATA && !cap_fifo_empty);
+
+    always @(posedge clk_sys or negedge rst_n) begin
+        if (!rst_n) begin
+            spi_state <= SP_IDLE;
+        end else begin
+            case (spi_state)
+                SP_IDLE: begin
+                    // Wait for a frame SOF to appear at the cap_fifo head
+                    if (!cap_fifo_empty && cap_fifo_rdata[9])
+                        spi_state <= SP_SOF;
+                end
+                SP_SOF: begin
+                    // Sending 0xFE marker; advance when spi_slave consumes it
+                    if (spi_fifo_rd)
+                        spi_state <= SP_DATA;
+                end
+                SP_DATA: begin
+                    if (spi_fifo_rd && !cap_fifo_empty && cap_fifo_rdata[8])  // EOF consumed
+                        spi_state <= SP_IDLE;
+                end
+                default: spi_state <= SP_IDLE;
+            endcase
+        end
+    end
+
+    spi_slave spi_s (
+        .clk       (clk_sys),
+        .rst_n     (rst_n),
+        .fifo_data (spi_byte_out),
+        .fifo_empty(!spi_byte_vld),
+        .fifo_rd   (spi_fifo_rd),
+        .spi_sck   (spi_sclk),
+        .spi_cs_n  (spi_cs_n),
+        .spi_miso  (spi_miso)
+    );
 
 endmodule

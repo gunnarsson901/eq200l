@@ -29,6 +29,7 @@ module rmii_rx (
     reg [1:0] dibit;        // dibit position in current byte (0-3)
     reg [7:0] sreg;         // shift register
     reg       first_byte;
+    reg       crs_dv_prev;  // LAN8720 CRS_DV can glitch low 1 cycle at SFD boundary
 
     // Dibit helper: extract 2 bits at position p from byte b
     function [1:0] dibit_of;
@@ -52,7 +53,9 @@ module rmii_rx (
             rx_sof     <= 0;
             rx_eof     <= 0;
             first_byte <= 1;
+            crs_dv_prev <= 0;
         end else begin
+            crs_dv_prev <= crs_dv;
             // Default: deassert strobes
             rx_valid <= 0;
             rx_sof   <= 0;
@@ -71,7 +74,7 @@ module rmii_rx (
                 // -------------------------------------------------------
                 // Consume preamble dibits (01…01) until SFD last dibit (11)
                 PREAMBLE: begin
-                    if (!crs_dv) begin
+                    if (!crs_dv && !crs_dv_prev) begin
                         state <= IDLE;
                     end else if (rxd == 2'b11) begin
                         // Last dibit of SFD (0xD5) detected
@@ -84,15 +87,15 @@ module rmii_rx (
 
                 // -------------------------------------------------------
                 DATA: begin
-                    if (!crs_dv) begin
-                        // Frame ended mid-byte or on byte boundary
+                    if (!crs_dv && !crs_dv_prev) begin
+                        // Frame ended (two consecutive low = real EOF, not LAN8720 glitch)
                         rx_valid <= 1;
                         rx_eof   <= 1;
                         rx_data  <= sreg;
                         state    <= IDLE;
                         first_byte <= 1;
                     end else begin
-                        // Shift in LSB-first
+                        // Collect dibit always — CRS_DV is steady 1 post-SFD per LAN8720 spec
                         sreg  <= {rxd, sreg[7:2]};
                         dibit <= dibit + 1;
 
