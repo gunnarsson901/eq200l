@@ -6,6 +6,15 @@ import socket
 import subprocess
 import time
 
+try:
+    import lgpio as _lgpio
+    _LGPIO_OK = True
+except ImportError:
+    _LGPIO_OK = False
+
+MARAUDER_SPI  = "/dev/spidev0.0"
+MARAUDER_GPIO = 24   # ready/IRQ pin
+
 from PIL import Image, ImageDraw, ImageFont
 
 from display import init_display
@@ -225,6 +234,37 @@ def _connections():
     return out
 
 
+def _marauder_status():
+    out = []
+
+    spi_ok = os.path.exists(MARAUDER_SPI)
+    out.append(f"SPI: {'OK' if spi_ok else 'not found'}")
+
+    if _LGPIO_OK:
+        try:
+            h   = _lgpio.gpiochip_open(0)
+            _lgpio.gpio_claim_input(h, MARAUDER_GPIO, _lgpio.SET_PULL_UP)
+            val = _lgpio.gpio_read(h, MARAUDER_GPIO)
+            _lgpio.gpiochip_close(h)
+            out.append(f"GPIO{MARAUDER_GPIO}: {'HI' if val else 'LO'}")
+        except Exception:
+            out.append(f"GPIO{MARAUDER_GPIO}: err")
+    else:
+        out.append("lgpio: missing")
+
+    try:
+        r = subprocess.run(
+            ['ls', '/sys/bus/spi/devices/'],
+            capture_output=True, text=True, timeout=2,
+        )
+        devs = r.stdout.strip().split()
+        out.append(f"SPI devs:{len(devs)}")
+    except Exception:
+        pass
+
+    return out
+
+
 # ── action helpers ────────────────────────────────────────────────────────────
 
 def _tbi():
@@ -282,11 +322,64 @@ def build_menu():
              )},
             {'label': 'Stream Capture', 'action': _tbi},
         ]},
+        {'label': 'Marauder', 'action': [
+            {'label': 'WiFi', 'action': [
+                {'label': 'Probe Sniff',
+                 'action': lambda: _hint(
+                     "Probe Sniff",
+                     "scanap",
+                     " then: sniffprobe",
+                 )},
+                {'label': 'Beacon Scan',
+                 'action': lambda: _hint(
+                     "Beacon Scan",
+                     "scanap",
+                 )},
+                {'label': 'Deauth Detect',
+                 'action': lambda: _hint(
+                     "Deauth Detect",
+                     "sniffdeauth",
+                 )},
+                {'label': 'PMKID Sniff',
+                 'action': lambda: _hint(
+                     "PMKID Sniff",
+                     "sniffpmkid",
+                 )},
+                {'label': 'Wardriving',
+                 'action': lambda: _hint(
+                     "Wardriving",
+                     "wardrive",
+                 )},
+            ]},
+            {'label': 'Bluetooth', 'action': [
+                {'label': 'BLE Scan',
+                 'action': lambda: _hint(
+                     "BLE Scan",
+                     "blescansave",
+                 )},
+                {'label': 'BT Scan',
+                 'action': lambda: _hint(
+                     "BT Scan",
+                     "btscan",
+                 )},
+            ]},
+            {'label': 'Status',
+             'action': lambda: ('lines', _marauder_status(), "Marauder")},
+            {'label': 'Update FW',
+             'action': lambda: _hint(
+                 "Update FW",
+                 "Use Web-OTA or",
+                 "ESP32Marouder/",
+                 "MarauderOTA/",
+             )},
+        ]},
         {'label': 'Settings', 'action': [
             {'label': 'Device Info',
              'action': lambda: ('lines', _device_info(), "Device Info")},
             {'label': 'Connections',
              'action': lambda: ('lines', _connections(), "Connections")},
+            {'label': 'Marauder HW',
+             'action': lambda: ('lines', _marauder_status(), "Marauder HW")},
             {'label': 'GitHub QR',
              'action': lambda: ('qr', None, None)},
             {'label': 'Contrast',       'action': _tbi},

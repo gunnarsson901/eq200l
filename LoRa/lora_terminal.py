@@ -6,9 +6,14 @@ The STM32 firmware acts as a UART<->LoRa bridge:
   - Bytes sent here are transmitted over LoRa (433 MHz, SF9, BW125, 22 dBm)
   - Bytes received via LoRa are printed here as raw text
 
+Boot circuit (via CH340 serial download circuit on PCB):
+  - DTR Low  → NRST pulse (reset)
+  - RTS High → BOOT0 High (bootloader mode)
+  - RTS Low  → BOOT0 Low  (run app from flash)
+
 Usage:
-  python3 lora_terminal.py          # interactive terminal
-  python3 lora_terminal.py --reset  # toggle DTR to trigger startup banner
+  python3 lora_terminal.py          # interactive terminal (no reset)
+  python3 lora_terminal.py --reset  # boot app via RTS/DTR sequence
 """
 
 import serial
@@ -47,19 +52,21 @@ def main():
     args = parser.parse_args()
 
     ser = serial.Serial(args.port, BAUDRATE, timeout=0.1, dsrdtr=False, rtscts=False)
-    # Prevent accidental STM32 reset via DTR auto-reset circuit (like Arduino).
-    # Keep DTR high (idle) — only pulse it when explicitly requested.
-    ser.dtr = True
+    # RTS LOW = BOOT0 LOW = boot app from flash (not bootloader)
+    # DTR idles HIGH (NRST released)
     ser.rts = False
+    ser.dtr = True
 
     if args.reset:
-        print('[*] Resetting STM32 via DTR pulse...')
-        ser.dtr = False   # assert reset (active low via cap)
+        print('[*] Booting app via RTS/DTR reset sequence...')
+        ser.rts = False   # BOOT0=LOW → will boot app on reset
+        ser.dtr = False   # assert NRST (reset)
         time.sleep(0.1)
-        ser.dtr = True    # release
-        time.sleep(0.8)   # wait for boot + LoRa init (~500ms)
-
-    ser.reset_input_buffer()
+        ser.dtr = True    # release NRST → STM32 boots app from flash
+        # Do NOT flush buffer here — banner arrives during this wait
+        time.sleep(2.0)   # LoRa SPI init can take ~1-2s
+    else:
+        ser.reset_input_buffer()
 
     print(f'[*] Connected to {args.port} at {BAUDRATE} baud')
     print('[*] Type a message and press Enter to send via LoRa.')
